@@ -22,3 +22,7 @@ val native : Tests.t
 val toplevel : Tests.t
 
 val expect : Tests.t
+
+val ocamldoc : Tests.t
+
+val asmgen : Tests.t

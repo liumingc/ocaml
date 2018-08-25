@@ -17,6 +17,8 @@
 
 ROOTDIR=../..
 include $(ROOTDIR)/config/Makefile
+include $(ROOTDIR)/Makefile.common
+
 CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 CAMLYACC ?= $(ROOTDIR)/boot/ocamlyacc
 
@@ -29,8 +31,8 @@ endif
 CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -nostdlib -I $(ROOTDIR)/stdlib
 CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt -nostdlib \
         -I $(ROOTDIR)/stdlib
-CFLAGS += $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
-CPPFLAGS += -I$(ROOTDIR)/byterun
+OC_CFLAGS += $(SHAREDLIB_CFLAGS) $(EXTRACFLAGS)
+OC_CPPFLAGS += -I$(ROOTDIR)/runtime
 
 # Compilation options
 COMPFLAGS=-absname -w +a-4-9-41-42-44-45-48 -warn-error A -bin-annot -g \
@@ -58,9 +60,11 @@ CMIFILES ?= $(CAMLOBJS:.cmo=.cmi)
 CAMLOBJS_NAT ?= $(CAMLOBJS:.cmo=.cmx)
 CLIBNAME ?= $(LIBNAME)
 
+.PHONY: all allopt opt.opt # allopt and opt.opt are synonyms
 all: lib$(CLIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
 
 allopt: lib$(CLIBNAME).$(A) $(LIBNAME).cmxa $(LIBNAME).$(CMXS) $(CMIFILES)
+opt.opt: allopt
 
 $(LIBNAME).cma: $(CAMLOBJS)
 	$(MKLIB) -o $(LIBNAME) -oc $(CLIBNAME) -ocamlc '$(CAMLC)' -linkall \
@@ -76,24 +80,36 @@ $(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(CLIBNAME).$(A)
 lib$(CLIBNAME).$(A): $(COBJS)
 	$(MKLIB) -oc $(CLIBNAME) $(COBJS) $(LDOPTS)
 
-INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
-INSTALL_STUBLIBDIR=$(DESTDIR)$(STUBLIBDIR)
-
 install::
 	if test -f dll$(CLIBNAME)$(EXT_DLL); then \
-	  cp dll$(CLIBNAME)$(EXT_DLL) "$(INSTALL_STUBLIBDIR)/"; fi
-	cp lib$(CLIBNAME).$(A) "$(INSTALL_LIBDIR)/"
+	  $(INSTALL_PROG) \
+	    dll$(CLIBNAME)$(EXT_DLL) \
+	    "$(INSTALL_STUBLIBDIR)/"; \
+	fi
+	$(INSTALL_DATA) lib$(CLIBNAME).$(A) "$(INSTALL_LIBDIR)/"
 	cd "$(INSTALL_LIBDIR)"; $(RANLIB) lib$(CLIBNAME).$(A)
-	cp $(LIBNAME).cma $(CMIFILES) $(CMIFILES:.cmi=.mli) \
-          $(CMIFILES:.cmi=.cmti) "$(INSTALL_LIBDIR)/"
+
+	$(INSTALL_DATA) \
+	  $(LIBNAME).cma $(CMIFILES) \
+	  "$(INSTALL_LIBDIR)/"
+ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
+	$(INSTALL_DATA) \
+	  $(CMIFILES:.cmi=.mli) \
+          $(CMIFILES:.cmi=.cmti) \
+	  "$(INSTALL_LIBDIR)/"
+endif
 	if test -n "$(HEADERS)"; then \
-	  cp $(HEADERS) "$(INSTALL_LIBDIR)/caml/"; fi
+	  $(INSTALL_DATA) $(HEADERS) "$(INSTALL_LIBDIR)/caml/"; \
+	fi
 
 installopt:
-	cp $(CAMLOBJS_NAT) $(LIBNAME).cmxa $(LIBNAME).$(A) "$(INSTALL_LIBDIR)/"
+	$(INSTALL_DATA) \
+	   $(CAMLOBJS_NAT) $(LIBNAME).cmxa $(LIBNAME).$(A) \
+	   "$(INSTALL_LIBDIR)/"
 	cd "$(INSTALL_LIBDIR)"; $(RANLIB) $(LIBNAME).a
 	if test -f $(LIBNAME).cmxs; then \
-	  cp $(LIBNAME).cmxs "$(INSTALL_LIBDIR)/"; fi
+	  $(INSTALL_PROG) $(LIBNAME).cmxs "$(INSTALL_LIBDIR)/"; \
+	fi
 
 partialclean:
 	rm -f *.cm*
@@ -113,4 +129,4 @@ clean:: partialclean
 	$(CAMLOPT) -c $(COMPFLAGS) $(OPTCOMPFLAGS) $<
 
 .c.$(O):
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $<

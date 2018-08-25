@@ -15,7 +15,7 @@
 
 open Format
 
-type t = { stamp: int; name: string; mutable flags: int }
+type t = { stamp: int; name: string; flags: int }
 
 let global_flag = 1
 let predef_exn_flag = 2
@@ -28,9 +28,13 @@ let create s =
   incr currentstamp;
   { name = s; stamp = !currentstamp; flags = 0 }
 
+let create_hidden s =
+  { name = s; stamp = -1; flags = 0 }
+
 let create_predef_exn s =
   incr currentstamp;
-  { name = s; stamp = !currentstamp; flags = predef_exn_flag }
+  { name = s; stamp = !currentstamp;
+    flags = predef_exn_flag lor global_flag }
 
 let create_persistent s =
   { name = s; stamp = 0; flags = global_flag }
@@ -40,6 +44,8 @@ let rename i =
   { i with stamp = !currentstamp }
 
 let name i = i.name
+
+let with_name i name = { i with name; }
 
 let unique_name i = i.name ^ "_" ^ string_of_int i.stamp
 
@@ -69,12 +75,6 @@ let reinit () =
   then reinit_level := !currentstamp
   else currentstamp := !reinit_level
 
-let hide i =
-  { i with stamp = -1 }
-
-let make_global i =
-  i.flags <- i.flags lor global_flag
-
 let global i =
   (i.flags land global_flag) <> 0
 
@@ -85,7 +85,11 @@ let print ppf i =
   match i.stamp with
   | 0 -> fprintf ppf "%s!" i.name
   | -1 -> fprintf ppf "%s#" i.name
-  | n -> fprintf ppf "%s/%i%s" i.name n (if global i then "g" else "")
+  | n ->
+    let stampstr =
+      if !Clflags.unique_ids then Printf.sprintf "/%i" n else ""
+    in
+    fprintf ppf "%s%s%s" i.name stampstr (if global i then "g" else "")
 
 type 'a tbl =
     Empty

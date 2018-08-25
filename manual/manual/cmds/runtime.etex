@@ -1,5 +1,4 @@
 \chapter{The runtime system (ocamlrun)} \label{c:runtime}
-\pdfchapter{The runtime system (ocamlrun)}
 %HEVEA\cutname{runtime.html}
 
 The "ocamlrun" command executes bytecode files produced by the
@@ -63,6 +62,11 @@ in the "OCAMLRUNPARAM" environment variable (see below).
 Search the directory \var{dir} for dynamically-loaded libraries,
 in addition to the standard search path (see
 section~\ref{s-ocamlrun-dllpath}).
+\item["-m"]
+Print the magic number of the bytecode executable given as argument
+and exit.
+\item["-M"]
+Print the magic number expected by this version of the runtime and exit.
 \item["-p"]
 Print the names of the primitives known to this version of
 "ocamlrun" and exit.

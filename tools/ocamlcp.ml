@@ -23,6 +23,9 @@ let option opt () = compargs := opt :: !compargs
 let option_with_arg opt arg =
   compargs := (Filename.quote arg) :: opt :: !compargs
 ;;
+let option_with_int opt arg =
+  compargs := (string_of_int arg) :: opt :: !compargs
+;;
 
 let make_archive = ref false;;
 let with_impl = ref false;;
@@ -52,6 +55,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _cclib s = option_with_arg "-cclib" s
   let _ccopt s = option_with_arg "-ccopt" s
   let _config = option "-config"
+  let _config_var s = option_with_arg "-config-var" s
   let _compat_32 = option "-compat-32"
   let _custom = option "-custom"
   let _dllib = option_with_arg "-dllib"
@@ -118,6 +122,10 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _color s = option_with_arg "-color" s
   let _where = option "-where"
   let _nopervasives = option "-nopervasives"
+  let _match_context_rows n = option_with_int "-match-context-rows" n
+  let _dump_into_file = option "-dump-into-file"
+  let _dno_unique_ids = option "-dno-unique-ids"
+  let _dunique_ids = option "-dunique-ids"
   let _dsource = option "-dsource"
   let _dparsetree = option "-dparsetree"
   let _dtypedtree = option "-dtypedtree"
@@ -125,6 +133,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dlambda = option "-dlambda"
   let _dflambda = option "-dflambda"
   let _dinstr = option "-dinstr"
+  let _dcamlprimc = option "-dcamlprimc"
   let _dtimings = option "-dtimings"
   let _dprofile = option "-dprofile"
   let _args = Arg.read_arg

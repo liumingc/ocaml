@@ -97,7 +97,9 @@ let docs_attr ds =
   let item =
     { pstr_desc = Pstr_eval (exp, []); pstr_loc = exp.pexp_loc }
   in
-    (doc_loc, PStr [item])
+  { attr_name = doc_loc;
+    attr_payload = PStr [item];
+    attr_loc = Location.none }
 
 let add_docs_attrs docs attrs =
   let attrs =
@@ -144,7 +146,9 @@ let text_attr ds =
   let item =
     { pstr_desc = Pstr_eval (exp, []); pstr_loc = exp.pexp_loc }
   in
-    (text_loc, PStr [item])
+  { attr_name = text_loc;
+    attr_payload = PStr [item];
+    attr_loc = Location.none }
 
 let add_text_attrs dsl attrs =
   let fdsl = List.filter (function {ds_body=""} -> false| _ ->true) dsl in
@@ -243,6 +247,12 @@ let get_text pos =
       get_docstrings dsl
   with Not_found -> []
 
+let get_post_text pos =
+  try
+    let dsl = Hashtbl.find post_table pos in
+      get_docstrings dsl
+  with Not_found -> []
+
 (* Maps from positions to extra docstrings *)
 
 let pre_extra_table : (Lexing.position, docstring list) Hashtbl.t =
@@ -314,6 +324,9 @@ let symbol_text_lazy () =
 
 let rhs_text pos =
   get_text (Parsing.rhs_start_pos pos)
+
+let rhs_post_text pos =
+  get_post_text (Parsing.rhs_end_pos pos)
 
 let rhs_text_lazy pos =
   let pos = Parsing.rhs_start_pos pos in

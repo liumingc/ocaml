@@ -43,33 +43,25 @@ let init_path ?(dir="") native =
 (* Note: do not do init_path() in initial_env, this breaks
    toplevel initialization (PR#1775) *)
 
-let open_implicit_module m env =
-  let open Asttypes in
-  let lid = {loc = Location.in_file "command line";
-             txt = Longident.parse m } in
-  snd (Typemod.type_open_ Override env lid.loc lid)
-
 let initial_env () =
   Ident.reinit();
-  let initial =
-    if Config.safe_string then Env.initial_safe_string
-    else if !Clflags.unsafe_string then Env.initial_unsafe_string
-    else Env.initial_safe_string
+  let initially_opened_module =
+    if !Clflags.nopervasives then
+      None
+    else
+      Some "Stdlib"
   in
-  let env =
-    if !Clflags.nopervasives then initial else
-    open_implicit_module "Pervasives" initial
-  in
-  List.fold_left (fun env m ->
-    open_implicit_module m env
-  ) env (!implicit_modules @ List.rev !Clflags.open_modules)
+  Typemod.initial_env
+    ~loc:(Location.in_file "command line")
+    ~safe_string:(Config.safe_string || not !Clflags.unsafe_string)
+    ~initially_opened_module
+    ~open_implicit_modules:(List.rev !Clflags.open_modules)
 
-
-let read_color_env ppf =
+let read_color_env () =
   try
     match Clflags.parse_color_setting (Sys.getenv "OCAML_COLOR") with
     | None ->
-        Location.print_warning Location.none ppf
+        Location.prerr_warning Location.none
           (Warnings.Bad_env_variable
              ("OCAML_COLOR",
               "expected \"auto\", \"always\" or \"never\""));
@@ -78,3 +70,17 @@ let read_color_env ppf =
       | Some _ -> ()
   with
     Not_found -> ()
+
+let with_ppf_dump ~fileprefix f =
+  let ppf_dump, finally =
+    if not !Clflags.dump_into_file
+    then Format.err_formatter, ignore
+    else
+       let ch = open_out (fileprefix ^ ".dump") in
+       let ppf = Format.formatter_of_out_channel ch in
+       ppf,
+       (fun () ->
+         Format.pp_print_flush ppf ();
+         close_out ch)
+  in
+  Misc.try_finally (fun () -> f ppf_dump) ~always:finally

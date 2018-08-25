@@ -219,7 +219,8 @@ val index_from : bytes -> int -> char -> int
 
 val index_from_opt: bytes -> int -> char -> int option
 (** [index_from _opts i c] returns the index of the first occurrence of
-    byte [c] in [s] after position [i] or [None] if [c] does not occur in [s] after position [i].
+    byte [c] in [s] after position [i] or [None] if [c] does not occur in [s]
+    after position [i].
     [Bytes.index_opt s c] is equivalent to [Bytes.index_from_opt s 0 c].
 
     Raise [Invalid_argument] if [i] is not a valid position in [s].
@@ -446,6 +447,21 @@ let s = Bytes.of_string "hello"
     (for example {!Marshal.from_bytes}) and previously used the
     [string] type for this purpose.
 *)
+
+(** {6 Iterators} *)
+
+val to_seq : t -> char Seq.t
+(** Iterate on the string, in increasing index order. Modifications of the
+    string during iteration will be reflected in the iterator.
+    @since 4.07 *)
+
+val to_seqi : t -> (int * char) Seq.t
+(** Iterate on the string, in increasing order, yielding indices along chars
+    @since 4.07 *)
+
+val of_seq : char Seq.t -> t
+(** Create a string from the generator
+    @since 4.07 *)
 
 (**/**)
 

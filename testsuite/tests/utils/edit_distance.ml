@@ -1,3 +1,10 @@
+(* TEST
+include config
+include testing
+binary_modules = "config build_path_prefix_map misc identifiable numbers"
+* bytecode
+*)
+
 let edit_distance = Misc.edit_distance
 
 let show_cutoff n =

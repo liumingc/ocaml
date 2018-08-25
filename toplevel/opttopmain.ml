@@ -32,9 +32,11 @@ let is_expanded pos = pos < !first_nonexpanded_pos
 
 let expand_position pos len =
   if pos < !first_nonexpanded_pos then
-    first_nonexpanded_pos := !first_nonexpanded_pos + len (* Shift the position *)
+    (* Shift the position *)
+    first_nonexpanded_pos := !first_nonexpanded_pos + len
   else
-    first_nonexpanded_pos :=  pos + len + 2 (* New last position *)
+    (* New last position *)
+    first_nonexpanded_pos := pos + len + 2
 
 
 let prepare ppf =
@@ -63,8 +65,8 @@ let file_argument name =
        than the original argv.
     *)
     Printf.eprintf "For implementation reasons, the toplevel does not support\
-    \ having script files (here %S) inside expanded arguments passed through the\
-    \ -args{,0} command-line option.\n" name;
+    \ having script files (here %S) inside expanded arguments passed through\
+    \ the -args{,0} command-line option.\n" name;
     exit 2
   end else begin
     let newargs = Array.sub !argv !Arg.current
@@ -95,11 +97,9 @@ module Options = Main_args.Make_opttop_options (struct
   let set r () = r := true
   let clear r () = r := false
 
-  let _absname = set Location.absname
+  let _absname = set absname
   let _compact = clear optimize_for_speed
-  let _I dir =
-    let dir = Misc.expand_directory Config.standard_library dir in
-    include_dirs := dir :: !include_dirs
+  let _I dir = include_dirs := dir :: !include_dirs
   let _init s = init_file := Some s
   let _noinit = set noinit
   let _clambda_checks () = clambda_checks := true
@@ -174,6 +174,7 @@ module Options = Main_args.Make_opttop_options (struct
   let _dflambda_verbose () =
     set dump_flambda ();
     set dump_flambda_verbose ()
+  let _dflambda_invariants = set flambda_invariant_checks
   let _dflambda_no_invariants = clear flambda_invariant_checks
   let _labels = clear classic
   let _alias_deps = clear transparent_modules
@@ -186,6 +187,7 @@ module Options = Main_args.Make_opttop_options (struct
   let _noprompt = set noprompt
   let _nopromptcont = set nopromptcont
   let _nostdlib = set no_std_include
+  let _nopervasives = set nopervasives
   let _ppx s = Compenv.first_ppx := s :: !Compenv.first_ppx
   let _principal = set principal
   let _no_principal = clear principal
@@ -201,7 +203,7 @@ module Options = Main_args.Make_opttop_options (struct
   let _stdin () = file_argument ""
   let _unboxed_types = set unboxed_types
   let _no_unboxed_types = clear unboxed_types
-  let _unsafe = set fast
+  let _unsafe = set unsafe
   let _verbose = set verbose
   let _version () = print_version ()
   let _vnum () = print_version_num ()
@@ -210,6 +212,8 @@ module Options = Main_args.Make_opttop_options (struct
   let _warn_error s = Warnings.parse_options true s
   let _warn_help = Warnings.help_warnings
 
+  let _dno_unique_ids = clear unique_ids
+  let _dunique_ids = set unique_ids
   let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree

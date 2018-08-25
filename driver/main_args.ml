@@ -64,6 +64,12 @@ let mk_config f =
   "-config", Arg.Unit f, " Print configuration values and exit"
 ;;
 
+let mk_config_var f =
+  "-config-var", Arg.String f,
+  " Print the value of a configuration variable, a newline, and exit\n\
+\    (print nothing and exit with error value if the variable does not exist)"
+;;
+
 let mk_custom f =
   "-custom", Arg.Unit f, " Link in custom mode"
 ;;
@@ -457,7 +463,7 @@ let mk_strict_sequence f =
 
 let mk_thread f =
   "-thread", Arg.Unit f,
-  " Generate code that supports the system threads library"
+  " (deprecated) same as -I +threads"
 ;;
 
 let mk_dtimings f =
@@ -597,8 +603,19 @@ let mk_nopervasives f =
   "-nopervasives", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_match_context_rows f =
+  "-match-context-rows", Arg.Int f,
+  let[@manual.ref "s:comp-options"] chapter, section = 9, 2 in
+  Printf.sprintf
+  "<n>  (advanced, see manual section %d.%d.)" chapter section
+;;
+
 let mk_use_prims f =
   "-use-prims", Arg.String f, "<file>  (undocumented)"
+;;
+
+let mk_dump_into_file f =
+  "-dump-into-file", Arg.Unit f, " dump output like -dlambda into <target>.dump"
 ;;
 
 let mk_dparsetree f =
@@ -611,6 +628,14 @@ let mk_dtypedtree f =
 
 let mk_drawlambda f =
   "-drawlambda", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dno_unique_ids f =
+  "-dno-unique-ids", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dunique_ids f =
+  "-dunique-ids", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dsource f =
@@ -637,6 +662,11 @@ let mk_drawflambda f =
   "-drawflambda", Arg.Unit f, " Print Flambda terms after closure conversion"
 ;;
 
+let mk_dflambda_invariants f =
+  "-dflambda-invariants", Arg.Unit f, " Check Flambda invariants \
+      around each pass"
+;;
+
 let mk_dflambda_no_invariants f =
   "-dflambda-no-invariants", Arg.Unit f, " Do not Check Flambda invariants \
       around each pass"
@@ -654,6 +684,10 @@ let mk_dflambda_verbose f =
 
 let mk_dinstr f =
   "-dinstr", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dcamlprimc f =
+  "-dcamlprimc", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dcmm f =
@@ -787,6 +821,7 @@ module type Common_options = sig
   val _noassert : unit -> unit
   val _nolabels : unit -> unit
   val _nostdlib : unit -> unit
+  val _nopervasives : unit -> unit
   val _open : string -> unit
   val _ppx : string -> unit
   val _principal : unit -> unit
@@ -809,6 +844,8 @@ module type Common_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
 
+  val _dno_unique_ids : unit -> unit
+  val _dunique_ids : unit -> unit
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
@@ -827,6 +864,7 @@ module type Compiler_options = sig
   val _cclib : string -> unit
   val _ccopt : string -> unit
   val _config : unit -> unit
+  val _config_var : string -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
   val _i : unit -> unit
@@ -858,9 +896,10 @@ module type Compiler_options = sig
   val _where : unit -> unit
   val _color : string -> unit
 
-  val _nopervasives : unit -> unit
+  val _match_context_rows : int -> unit
   val _dtimings : unit -> unit
   val _dprofile : unit -> unit
+  val _dump_into_file : unit -> unit
 
   val _args: string -> string array
   val _args0: string -> string array
@@ -893,6 +932,7 @@ module type Bytecomp_options = sig
   val _use_runtime : string -> unit
 
   val _dinstr : unit -> unit
+  val _dcamlprimc : unit -> unit
 
   val _use_prims : string -> unit
 end;;
@@ -931,6 +971,7 @@ module type Optcommon_options = sig
   val _clambda_checks : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
+  val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
   val _dflambda_verbose : unit -> unit
@@ -1011,6 +1052,7 @@ struct
     mk_color F._color;
     mk_compat_32 F._compat_32;
     mk_config F._config;
+    mk_config_var F._config_var;
     mk_custom F._custom;
     mk_dllib F._dllib;
     mk_dllpath F._dllpath;
@@ -1041,6 +1083,7 @@ struct
     mk_noautolink_byt F._noautolink;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_o F._o;
     mk_opaque F._opaque;
     mk_open F._open;
@@ -1080,16 +1123,20 @@ struct
     mk_where F._where;
     mk__ F.anonymous;
 
-    mk_nopervasives F._nopervasives;
+    mk_match_context_rows F._match_context_rows;
     mk_use_prims F._use_prims;
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
+    mk_dcamlprimc F._dcamlprimc;
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
+    mk_dump_into_file F._dump_into_file;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1113,6 +1160,7 @@ struct
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_open F._open;
     mk_ppx F._ppx;
     mk_principal F._principal;
@@ -1139,6 +1187,8 @@ struct
     mk_warn_help F._warn_help;
     mk__ F.anonymous;
 
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
@@ -1170,6 +1220,7 @@ struct
     mk_color F._color;
     mk_compact F._compact;
     mk_config F._config;
+    mk_config_var F._config_var;
     mk_dtypes F._annot;
     mk_for_pack_opt F._for_pack;
     mk_g_opt F._g;
@@ -1205,6 +1256,7 @@ struct
     mk_nodynlink F._nodynlink;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
     mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o F._o;
@@ -1253,7 +1305,9 @@ struct
     mk_where F._where;
     mk__ F.anonymous;
 
-    mk_nopervasives F._nopervasives;
+    mk_match_context_rows F._match_context_rows;
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
@@ -1263,6 +1317,7 @@ struct
     mk_dclambda F._dclambda;
     mk_dflambda F._dflambda;
     mk_drawflambda F._drawflambda;
+    mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_no_invariants F._dflambda_no_invariants;
     mk_dflambda_let F._dflambda_let;
     mk_dflambda_verbose F._dflambda_verbose;
@@ -1285,6 +1340,7 @@ struct
     mk_dstartup F._dstartup;
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
+    mk_dump_into_file F._dump_into_file;
     mk_dump_pass F._dump_pass;
 
     mk_args F._args;
@@ -1322,6 +1378,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
     mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o2 F._o2;

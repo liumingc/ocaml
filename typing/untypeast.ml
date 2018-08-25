@@ -62,6 +62,7 @@ type mapper = {
   typ: mapper -> T.core_type -> core_type;
   type_declaration: mapper -> T.type_declaration -> type_declaration;
   type_extension: mapper -> T.type_extension -> type_extension;
+  type_exception: mapper -> T.type_exception -> type_exception;
   type_kind: mapper -> T.type_kind -> type_kind;
   value_binding: mapper -> T.value_binding -> value_binding;
   value_description: mapper -> T.value_description -> value_description;
@@ -125,7 +126,12 @@ let constant = function
   | Const_nativeint i -> Pconst_integer (Nativeint.to_string i, Some 'n')
   | Const_float f -> Pconst_float (f,None)
 
-let attribute sub (s, p) = (map_loc sub s, p)
+let attribute sub a = {
+    attr_name = map_loc sub a.attr_name;
+    attr_payload = a.attr_payload;
+    attr_loc = a.attr_loc
+  }
+
 let attributes sub l = List.map (sub.attribute sub) l
 
 let structure sub str =
@@ -152,7 +158,7 @@ let structure_item sub item =
     | Tstr_typext tyext ->
         Pstr_typext (sub.type_extension sub tyext)
     | Tstr_exception ext ->
-        Pstr_exception (sub.extension_constructor sub ext)
+        Pstr_exception (sub.type_exception sub ext)
     | Tstr_module mb ->
         Pstr_module (sub.module_binding sub mb)
     | Tstr_recmodule list ->
@@ -246,6 +252,11 @@ let type_extension sub tyext =
     (map_loc sub tyext.tyext_txt)
     (List.map (sub.extension_constructor sub) tyext.tyext_constructors)
 
+let type_exception sub tyexn =
+  let attrs = sub.attributes sub tyexn.tyexn_attributes in
+  Te.mk_exception ~attrs
+    (sub.extension_constructor sub tyexn.tyexn_constructor)
+
 let extension_constructor sub ext =
   let loc = sub.location sub ext.ext_loc in
   let attrs = sub.attributes sub ext.ext_attributes in
@@ -315,6 +326,7 @@ let pattern sub pat =
     | Tpat_array list -> Ppat_array (List.map (sub.pat sub) list)
     | Tpat_or (p1, p2, _) -> Ppat_or (sub.pat sub p1, sub.pat sub p2)
     | Tpat_lazy p -> Ppat_lazy (sub.pat sub p)
+    | Tpat_exception p -> Ppat_exception (sub.pat sub p)
   in
   Pat.mk ~loc ~attrs desc
 
@@ -386,18 +398,8 @@ let expression sub exp =
                 None -> list
               | Some exp -> (label, sub.expr sub exp) :: list
           ) list [])
-    | Texp_match (exp, cases, exn_cases, _) ->
-      let merged_cases = sub.cases sub cases
-        @ List.map
-          (fun c ->
-            let uc = sub.case sub c in
-            let pat = { uc.pc_lhs
-                        with ppat_desc = Ppat_exception uc.pc_lhs }
-            in
-            { uc with pc_lhs = pat })
-          exn_cases
-      in
-      Pexp_match (sub.expr sub exp, merged_cases)
+    | Texp_match (exp, cases, _) ->
+      Pexp_match (sub.expr sub exp, sub.cases sub cases)
     | Texp_try (exp, cases) ->
         Pexp_try (sub.expr sub exp, sub.cases sub cases)
     | Texp_tuple list ->
@@ -501,7 +503,7 @@ let signature_item sub item =
     | Tsig_typext tyext ->
         Psig_typext (sub.type_extension sub tyext)
     | Tsig_exception ext ->
-        Psig_exception (sub.extension_constructor sub ext)
+        Psig_exception (sub.type_exception sub ext)
     | Tsig_module md ->
         Psig_module (sub.module_declaration sub md)
     | Tsig_recmodule list ->
@@ -708,7 +710,7 @@ let core_type sub ct =
 let class_structure sub cs =
   let rec remove_self = function
     | { pat_desc = Tpat_alias (p, id, _s) }
-      when string_is_prefix "selfpat-" id.Ident.name ->
+      when string_is_prefix "selfpat-" (Ident.name id) ->
         remove_self p
     | p -> p
   in
@@ -716,17 +718,25 @@ let class_structure sub cs =
     pcstr_fields = List.map (sub.class_field sub) cs.cstr_fields;
   }
 
-let row_field sub rf =
-  match rf with
-    Ttag (label, attrs, bool, list) ->
-      Rtag (label, sub.attributes sub attrs, bool, List.map (sub.typ sub) list)
-  | Tinherit ct -> Rinherit (sub.typ sub ct)
+let row_field sub {rf_loc; rf_desc; rf_attributes;} =
+  let loc = sub.location sub rf_loc in
+  let attrs = sub.attributes sub rf_attributes in
+  let desc = match rf_desc with
+    | Ttag (label, bool, list) ->
+        Rtag (label, bool, List.map (sub.typ sub) list)
+    | Tinherit ct -> Rinherit (sub.typ sub ct)
+  in
+  Rf.mk ~loc ~attrs desc
 
-let object_field sub ofield =
-  match ofield with
-    OTtag (label, attrs, ct) ->
-      Otag (label, sub.attributes sub attrs, sub.typ sub ct)
-  | OTinherit ct -> Oinherit (sub.typ sub ct)
+let object_field sub {of_loc; of_desc; of_attributes;} =
+  let loc = sub.location sub of_loc in
+  let attrs = sub.attributes sub of_attributes in
+  let desc = match of_desc with
+    | OTtag (label, ct) ->
+        Otag (label, sub.typ sub ct)
+    | OTinherit ct -> Oinherit (sub.typ sub ct)
+  in
+  Of.mk ~loc ~attrs desc
 
 and is_self_pat = function
   | { pat_desc = Tpat_alias(_pat, id, _) } ->
@@ -796,6 +806,7 @@ let default_mapper =
     type_kind = type_kind;
     typ = core_type;
     type_extension = type_extension;
+    type_exception = type_exception;
     extension_constructor = extension_constructor;
     value_description = value_description;
     pat = pattern;

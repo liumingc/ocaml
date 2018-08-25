@@ -125,7 +125,8 @@ let decl_abstr =
    type_private = Asttypes.Public;
    type_manifest = None;
    type_variance = [];
-   type_newtype_level = None;
+   type_is_newtype = false;
+   type_expansion_scope = None;
    type_attributes = [];
    type_immediate = false;
    type_unboxed = unboxed_false_default_false;
@@ -198,9 +199,9 @@ let common_initial_env add_type add_extension empty_env =
         ext_ret_type = None;
         ext_private = Asttypes.Public;
         ext_loc = Location.none;
-        ext_attributes = [{Asttypes.txt="ocaml.warn_on_literal_pattern";
-                           loc=Location.none},
-                          Parsetree.PStr[]] }
+        ext_attributes = [Ast_helper.Attr.mk
+                            (Location.mknoloc "ocaml.warn_on_literal_pattern")
+                            (Parsetree.PStr [])] }
   in
   add_extension ident_match_failure
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
@@ -243,12 +244,7 @@ let build_initial_env add_type add_exception empty_env =
   (safe_string, unsafe_string)
 
 let builtin_values =
-  List.map (fun id -> Ident.make_global id; (Ident.name id, id))
-      [ident_match_failure; ident_out_of_memory; ident_stack_overflow;
-       ident_invalid_argument;
-       ident_failure; ident_not_found; ident_sys_error; ident_end_of_file;
-       ident_division_by_zero; ident_sys_blocked_io;
-       ident_assert_failure; ident_undefined_recursive_module ]
+  List.map (fun id -> (Ident.name id, id)) all_predef_exns
 
 (* Start non-predef identifiers at 1000.  This way, more predefs can
    be defined in this file (above!) without breaking .cmi

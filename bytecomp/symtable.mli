@@ -20,8 +20,7 @@ open Cmo_format
 (* Functions for batch linking *)
 
 val init: unit -> unit
-val patch_object: bytes -> (reloc_info * int) list -> unit
-val ls_patch_object: Misc.LongString.t -> (reloc_info * int) list -> unit
+val patch_object: Misc.LongString.t -> (reloc_info * int) list -> unit
 val require_primitive: string -> unit
 val initial_global_table: unit -> Obj.t array
 val output_global_map: out_channel -> unit
@@ -47,6 +46,7 @@ val current_state: unit -> global_map
 val restore_state: global_map -> unit
 val hide_additions: global_map -> unit
 val filter_global_map: (Ident.t -> bool) -> global_map -> global_map
+val iter_global_map : (Ident.t -> int -> unit) -> global_map -> unit
 
 (* Error report *)
 

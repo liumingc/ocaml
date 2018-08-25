@@ -82,11 +82,7 @@ type ctx = {left:pattern list ; right:pattern list}
 let pretty_ctx ctx =
   List.iter
     (fun {left=left ; right=right} ->
-      prerr_string "LEFT:" ;
-      pretty_line Format.err_formatter left ;
-      prerr_string " RIGHT:" ;
-      pretty_line Format.err_formatter right ;
-      prerr_endline "")
+      Format.eprintf "LEFT:%a RIGHT:%a\n" pretty_line left pretty_line right)
     ctx
 
 let le_ctx c1 c2 =
@@ -108,7 +104,7 @@ let rec small_enough n = function
       else small_enough (n-1) rem
 
 let ctx_lshift ctx =
-  if small_enough 31 ctx then
+  if small_enough (!Clflags.match_context_rows - 1) ctx then
     List.map lshift ctx
   else (* Context pruning *) begin
     get_mins le_ctx (List.map lforget ctx)
@@ -416,27 +412,17 @@ let pretty_cases cases =
   List.iter
     (fun (ps,_l) ->
       List.iter
-        (fun p ->
-          top_pretty Format.str_formatter p ;
-          prerr_string " " ;
-          prerr_string (Format.flush_str_formatter ()))
+        (fun p -> Format.eprintf " %a%!" top_pretty p)
         ps ;
-(*
-      prerr_string " -> " ;
-      Printlambda.lambda Format.str_formatter l ;
-      prerr_string (Format.flush_str_formatter ()) ;
-*)
-      prerr_endline "")
+      Format.eprintf "\n")
     cases
 
 let pretty_def def =
-  prerr_endline "+++++ Defaults +++++" ;
+  Format.eprintf "+++++ Defaults +++++\n" ;
   List.iter
-    (fun (pss,i) ->
-      Printf.fprintf stderr "Matrix for %d\n"  i ;
-      pretty_matrix Format.err_formatter pss)
+    (fun (pss,i) -> Format.eprintf "Matrix for %d\n%a" i pretty_matrix pss)
     def ;
-  prerr_endline "+++++++++++++++++++++"
+  Format.eprintf "+++++++++++++++++++++\n"
 
 let pretty_pm pm =
   pretty_cases pm.cases ;
@@ -446,13 +432,13 @@ let pretty_pm pm =
 
 let rec pretty_precompiled = function
   | Pm pm ->
-      prerr_endline "++++ PM ++++" ;
+      Format.eprintf "++++ PM ++++\n" ;
       pretty_pm pm
   | PmVar x ->
-      prerr_endline "++++ VAR ++++" ;
+      Format.eprintf "++++ VAR ++++\n" ;
       pretty_precompiled x.inside
   | PmOr x ->
-      prerr_endline "++++ OR ++++" ;
+      Format.eprintf "++++ OR ++++\n" ;
       pretty_pm x.body ;
       pretty_matrix Format.err_formatter x.or_matrix ;
       List.iter
@@ -679,9 +665,9 @@ let default_compat p def =
 
 (* Or-pattern expansion, variables are a complication w.r.t. the article *)
 let rec extract_vars r p = match p.pat_desc with
-| Tpat_var (id, _) -> IdentSet.add id r
+| Tpat_var (id, _) -> Ident.Set.add id r
 | Tpat_alias (p, id,_ ) ->
-    extract_vars (IdentSet.add id r) p
+    extract_vars (Ident.Set.add id r) p
 | Tpat_tuple pats ->
     List.fold_left extract_vars r pats
 | Tpat_record (lpats,_) ->
@@ -696,6 +682,7 @@ let rec extract_vars r p = match p.pat_desc with
 | Tpat_lazy p -> extract_vars r p
 | Tpat_or (p,_,_) -> extract_vars r p
 | Tpat_constant _|Tpat_any|Tpat_variant (_,None,_) -> r
+| Tpat_exception _ -> assert false
 
 exception Cannot_flatten
 
@@ -727,8 +714,8 @@ let rec explode_or_pat arg patl mk_action rem vars aliases = function
 
 let pm_free_variables {cases=cases} =
   List.fold_right
-    (fun (_,act) r -> IdentSet.union (free_variables act) r)
-    cases IdentSet.empty
+    (fun (_,act) r -> Ident.Set.union (free_variables act) r)
+    cases Ident.Set.empty
 
 
 (* Basic grouping predicates *)
@@ -736,9 +723,33 @@ let pat_as_constr = function
   | {pat_desc=Tpat_construct (_, cstr,_)} -> cstr
   | _ -> fatal_error "Matching.pat_as_constr"
 
-let group_constant = function
-  | {pat_desc= Tpat_constant _} -> true
-  | _                           -> false
+let group_const_int = function
+  | {pat_desc= Tpat_constant Const_int _ } -> true
+  | _                                      -> false
+
+let group_const_char = function
+  | {pat_desc= Tpat_constant Const_char _ } -> true
+  | _                                      -> false
+
+let group_const_string = function
+  | {pat_desc= Tpat_constant Const_string _ } -> true
+  | _                                      -> false
+
+let group_const_float = function
+  | {pat_desc= Tpat_constant Const_float _ } -> true
+  | _                                      -> false
+
+let group_const_int32 = function
+  | {pat_desc= Tpat_constant Const_int32 _ } -> true
+  | _                                      -> false
+
+let group_const_int64 = function
+  | {pat_desc= Tpat_constant Const_int64 _ } -> true
+  | _                                      -> false
+
+let group_const_nativeint = function
+  | {pat_desc= Tpat_constant Const_nativeint _ } -> true
+  | _                                      -> false
 
 and group_constructor = function
   | {pat_desc = Tpat_construct (_,_,_)} -> true
@@ -770,7 +781,13 @@ and group_lazy = function
 
 let get_group p = match p.pat_desc with
 | Tpat_any -> group_var
-| Tpat_constant _ -> group_constant
+| Tpat_constant Const_int _ -> group_const_int
+| Tpat_constant Const_char _ -> group_const_char
+| Tpat_constant Const_string _ -> group_const_string
+| Tpat_constant Const_float _ -> group_const_float
+| Tpat_constant Const_int32 _ -> group_const_int32
+| Tpat_constant Const_int64 _ -> group_const_int64
+| Tpat_constant Const_nativeint _ -> group_const_nativeint
 | Tpat_construct _ -> group_constructor
 | Tpat_tuple _ -> group_tuple
 | Tpat_record _ -> group_record
@@ -817,8 +834,8 @@ let insert_or_append p ps act ors no =
         if is_or q then begin
           if may_compat p q then
             if
-              IdentSet.is_empty (extract_vars IdentSet.empty p) &&
-              IdentSet.is_empty (extract_vars IdentSet.empty q) &&
+              Ident.Set.is_empty (extract_vars Ident.Set.empty p) &&
+              Ident.Set.is_empty (extract_vars Ident.Set.empty q) &&
               equiv_pat p q
             then (* attempt insert, for equivalent orpats with no variables *)
               let _, not_e = get_equiv q rem in
@@ -1114,9 +1131,9 @@ and precompile_or argo cls ors args def k = match ors with
               args = (match args with _::r -> r | _ -> assert false) ;
               default = default_compat orp def} in
           let vars =
-            IdentSet.elements
-              (IdentSet.inter
-                 (extract_vars IdentSet.empty orp)
+            Ident.Set.elements
+              (Ident.Set.inter
+                 (extract_vars Ident.Set.empty orp)
                  (pm_free_variables orpm)) in
           let or_num = next_raise_count () in
           let new_patl = Parmatch.omega_list patl in
@@ -1147,7 +1164,7 @@ let split_precompile argo pm =
   let {me=next}, nexts = split_or argo pm.cases pm.args pm.default  in
   if dbg && (nexts <> [] || (match next with PmOr _ -> true | _ -> false))
   then begin
-    prerr_endline "** SPLIT **" ;
+    Format.eprintf "** SPLIT **\n" ;
     pretty_pm pm ;
     pretty_precompiled_res  next nexts
   end ;
@@ -1231,7 +1248,7 @@ let rec matcher_const cst p rem = match p.pat_desc with
 let get_key_constant caller = function
   | {pat_desc= Tpat_constant cst} -> cst
   | p ->
-      prerr_endline ("BAD: "^caller) ;
+      Format.eprintf "BAD: %s" caller ;
       pretty_pat p ;
       assert false
 
@@ -1478,6 +1495,8 @@ let get_mod_field modname field =
 
 let code_force_lazy_block =
   get_mod_field "CamlinternalLazy" "force_lazy_block"
+let code_force_lazy =
+  get_mod_field "CamlinternalLazy" "force"
 ;;
 
 (* inline_lazy_force inlines the beginning of the code of Lazy.force. When
@@ -1540,13 +1559,25 @@ let inline_lazy_force_switch arg loc =
                sw_failaction = Some varg }, loc ))))
 
 let inline_lazy_force arg loc =
-  if !Clflags.native_code then
-    (* Lswitch generates compact and efficient native code *)
-    inline_lazy_force_switch arg loc
+  if !Clflags.afl_instrument then
+    (* Disable inlining optimisation if AFL instrumentation active,
+       so that the GC forwarding optimisation is not visible in the
+       instrumentation output.
+       (see https://github.com/stedolan/crowbar/issues/14) *)
+    Lapply{ap_should_be_tailcall = false;
+           ap_loc=loc;
+           ap_func=Lazy.force code_force_lazy;
+           ap_args=[arg];
+           ap_inlined=Default_inline;
+           ap_specialised=Default_specialise}
   else
-    (* generating bytecode: Lswitch would generate too many rather big
-       tables (~ 250 elts); conditionals are better *)
-    inline_lazy_force_cond arg loc
+    if !Clflags.native_code then
+      (* Lswitch generates compact and efficient native code *)
+      inline_lazy_force_switch arg loc
+    else
+      (* generating bytecode: Lswitch would generate too many rather big
+         tables (~ 250 elts); conditionals are better *)
+      inline_lazy_force_cond arg loc
 
 let make_lazy_matching def = function
     [] -> fatal_error "Matching.make_lazy_matching"
@@ -1901,7 +1932,7 @@ module SArg = struct
   type primitive = Lambda.primitive
 
   let eqint = Pintcomp Ceq
-  let neint = Pintcomp Cneq
+  let neint = Pintcomp Cne
   let leint = Pintcomp Cle
   let ltint = Pintcomp Clt
   let geint = Pintcomp Cge
@@ -2170,7 +2201,7 @@ let mk_failaction_neg partial ctx def = match partial with
 (* In line with the article and simpler than before *)
 let mk_failaction_pos partial seen ctx defs  =
   if dbg then begin
-    prerr_endline "**POS**" ;
+    Format.eprintf "**POS**\n" ;
     pretty_def defs ;
     ()
   end ;
@@ -2196,7 +2227,7 @@ let mk_failaction_pos partial seen ctx defs  =
       | _  -> scan_def ((List.map fst now,idef)::env) later rem in
 
   let fail_pats = complete_pats_constrs seen in
-  if List.length fail_pats < 32 then begin
+  if List.length fail_pats < !Clflags.match_context_rows then begin
     let fail,jmps =
       scan_def
         []
@@ -2254,22 +2285,22 @@ let combine_constant loc arg cst partial ctx def
     | Const_float _ ->
         make_test_sequence loc
           fail
-          (Pfloatcomp Cneq) (Pfloatcomp Clt)
+          (Pfloatcomp CFneq) (Pfloatcomp CFlt)
           arg const_lambda_list
     | Const_int32 _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pint32, Cneq)) (Pbintcomp(Pint32, Clt))
+          (Pbintcomp(Pint32, Cne)) (Pbintcomp(Pint32, Clt))
           arg const_lambda_list
     | Const_int64 _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pint64, Cneq)) (Pbintcomp(Pint64, Clt))
+          (Pbintcomp(Pint64, Cne)) (Pbintcomp(Pint64, Clt))
           arg const_lambda_list
     | Const_nativeint _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pnativeint, Cneq)) (Pbintcomp(Pnativeint, Clt))
+          (Pbintcomp(Pnativeint, Cne)) (Pbintcomp(Pnativeint, Clt))
           arg const_lambda_list
   in lambda1,jumps_union local_jumps total
 
@@ -2718,14 +2749,13 @@ let rec compile_match repr partial ctx m = match m with
 (* verbose version of do_compile_matching, for debug *)
 
 and do_compile_matching_pr repr partial ctx arg x =
-  prerr_string "COMPILE: " ;
-  prerr_endline (match partial with Partial -> "Partial" | Total -> "Total") ;
-  prerr_endline "MATCH" ;
+  Format.eprintf "COMPILE: %s\nMATCH\n"
+    (match partial with Partial -> "Partial" | Total -> "Total") ;
   pretty_precompiled x ;
-  prerr_endline "CTX" ;
+  Format.eprintf "CTX\n" ;
   pretty_ctx ctx ;
   let (_, jumps) as r =  do_compile_matching repr partial ctx arg x in
-  prerr_endline "JUMPS" ;
+  Format.eprintf "JUMPS\n" ;
   pretty_jumps jumps ;
   r
 
@@ -2824,6 +2854,7 @@ let find_in_pat pred =
         find_rec p || find_rec q
     | Tpat_constant _ | Tpat_var _
     | Tpat_any | Tpat_variant (_,None,_) -> false
+    | Tpat_exception _ -> assert false
   end in
   find_rec
 
@@ -2833,6 +2864,7 @@ let is_lazy_pat = function
   | Tpat_tuple _|Tpat_construct _ | Tpat_array _
   | Tpat_or _ | Tpat_constant _ | Tpat_var _ | Tpat_any
       -> false
+  | Tpat_exception _ -> assert false
 
 let is_lazy p = find_in_pat is_lazy_pat p
 
@@ -2849,6 +2881,7 @@ let have_mutable_field p = match p with
 | Tpat_or _
 | Tpat_constant _ | Tpat_var _ | Tpat_any
   -> false
+| Tpat_exception _ -> assert false
 
 let is_mutable p = find_in_pat have_mutable_field p
 
@@ -2910,7 +2943,6 @@ let compile_matching repr handler_fun arg pat_act_list partial =
 
 
 let partial_function loc () =
-  (* [Location.get_pos_info] is too expensive *)
   let (fname, line, char) = Location.get_pos_info loc.Location.loc_start in
   Lprim(Praise Raise_regular, [Lprim(Pmakeblock(0, Immutable, None),
           [transl_normal_path Predef.path_match_failure;

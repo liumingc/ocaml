@@ -56,7 +56,7 @@ module List = struct
 end
 
 module String = struct
-  include String
+  include Misc.Stdlib.String
   let string_of_char = String.make 1
 
   let words s =
@@ -155,6 +155,11 @@ module Sys = struct
       end
     end
 
+  let force_remove file =
+    if file_exists file then remove file
+
+  external has_symlink : unit -> bool = "caml_has_symlink"
+
   let with_chdir path f =
     let oldcwd = Sys.getcwd () in
     Sys.chdir path;
@@ -165,11 +170,8 @@ module Sys = struct
     | exception e ->
         Sys.chdir oldcwd;
         raise e
-end
 
-module StringSet = struct
-  include Set.Make (String)
-  let string_of_stringset s = String.concat ", " (elements s)
+  let getenv_with_default_value variable default_value =
+    try Sys.getenv variable with Not_found -> default_value
+  let safe_getenv variable = getenv_with_default_value variable ""
 end
-
-module StringMap : Map.S with type key = string = Map.Make (String)

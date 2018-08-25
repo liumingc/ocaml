@@ -16,6 +16,7 @@
 ROOTDIR=../..
 
 include $(ROOTDIR)/config/Makefile
+include $(ROOTDIR)/Makefile.common
 
 CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 CAMLYACC ?= $(ROOTDIR)/boot/ocamlyacc
@@ -74,13 +75,15 @@ lib$(LIBNAME)nat.$(A): $(NATIVECODE_C_OBJS)
 
 $(LIBNAME).cma: $(THREADS_BCOBJS)
 ifeq "$(UNIX_OR_WIN32)" "unix"
-	$(MKLIB) -o $(LIBNAME) -ocamlc '$(CAMLC)' -cclib -lunix -linkall $(PTHREAD_CAML_LINK) $^
+	$(MKLIB) -o $(LIBNAME) -ocamlc '$(CAMLC)' -cclib -lunix -linkall \
+	  $(PTHREAD_CAML_LINK) $^
 # TODO: Figure out why -cclib -lunix is used here.
 # It may be because of the threadsUnix module which is deprecated.
 # It may hence be good to figure out whether this module shouldn't be
 # removed, and then -cclib -lunix arguments.
 else # Windows
-	$(MKLIB) -o $(LIBNAME) -ocamlc "$(CAMLC)" -linkall $(PTHREAD_CAML_LINK) $^
+	$(MKLIB) -o $(LIBNAME) -ocamlc "$(CAMLC)" -linkall \
+	  $(PTHREAD_CAML_LINK) $^
 endif
 
 # See remark above: force static linking of libthreadsnat.a
@@ -97,12 +100,12 @@ $(LIBNAME).cmxa: $(THREADS_NCOBJS)
 # twice, each time with different options).
 
 st_stubs_b.$(O): st_stubs.c $(HEADER)
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) -I$(ROOTDIR)/byterun  \
-	  $(SHAREDCCCOMPOPTS) $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime  \
+	  $(SHAREDLIB_CFLAGS) $(OUTPUTOBJ)$@ $<
 
 st_stubs_n.$(O): st_stubs.c $(HEADER)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -I$(ROOTDIR)/asmrun -I$(ROOTDIR)/byterun \
-	  $(SHAREDCCCOMPOPTS) -DNATIVE_CODE \
+	$(CC) $(OC_CFLAGS) $(OC_CPPFLAGS) \
+	  -I$(ROOTDIR)/runtime $(SHAREDLIB_CFLAGS) -DNATIVE_CODE \
 	  -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) \
 	  $(OUTPUTOBJ)$@ -c $<
 
@@ -112,25 +115,34 @@ partialclean:
 clean: partialclean
 	rm -f dllthreads*$(EXT_DLL) *.$(A) *.$(O)
 
-INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
-THREADS_LIBDIR=$(INSTALL_LIBDIR)/$(LIBNAME)
-INSTALL_STUBLIBDIR=$(DESTDIR)$(STUBLIBDIR)
+INSTALL_THREADSLIBDIR=$(INSTALL_LIBDIR)/$(LIBNAME)
 
 install:
 	if test -f dllthreads$(EXT_DLL); then \
-	  cp dllthreads$(EXT_DLL) "$(INSTALL_STUBLIBDIR)/dllthreads$(EXT_DLL)"; fi
-	cp libthreads.$(A) "$(INSTALL_LIBDIR)"
+	  $(INSTALL_PROG) \
+	    dllthreads$(EXT_DLL) "$(INSTALL_STUBLIBDIR)/dllthreads$(EXT_DLL)"; \
+	fi
+	$(INSTALL_DATA) libthreads.$(A) "$(INSTALL_LIBDIR)"
 	cd "$(INSTALL_LIBDIR)"; $(RANLIB) libthreads.$(A)
-	mkdir -p "$(THREADS_LIBDIR)"
-	cp $(CMIFILES) $(CMIFILES:.cmi=.cmti) threads.cma "$(THREADS_LIBDIR)"
-	cp $(MLIFILES) "$(INSTALL_LIBDIR)"
-	cp threads.h "$(INSTALL_LIBDIR)/caml"
+	mkdir -p "$(INSTALL_THREADSLIBDIR)"
+	$(INSTALL_DATA) \
+	  $(CMIFILES) threads.cma \
+	  "$(INSTALL_THREADSLIBDIR)"
+ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
+	$(INSTALL_DATA) \
+	  $(CMIFILES:.cmi=.cmti) \
+	  "$(INSTALL_THREADSLIBDIR)"
+	$(INSTALL_DATA) $(MLIFILES) "$(INSTALL_THREADSLIBDIR)"
+endif
+	$(INSTALL_DATA) threads.h "$(INSTALL_LIBDIR)/caml"
 
 installopt:
-	cp libthreadsnat.$(A) "$(INSTALL_LIBDIR)"
+	$(INSTALL_DATA) libthreadsnat.$(A) "$(INSTALL_LIBDIR)"
 	cd "$(INSTALL_LIBDIR)"; $(RANLIB) libthreadsnat.$(A)
-	cp $(THREADS_NCOBJS) threads.cmxa threads.$(A) "$(THREADS_LIBDIR)"
-	cd "$(THREADS_LIBDIR)" && $(RANLIB) threads.$(A)
+	$(INSTALL_DATA) \
+	  $(THREADS_NCOBJS) threads.cmxa threads.$(A) \
+	  "$(INSTALL_THREADSLIBDIR)"
+	cd "$(INSTALL_THREADSLIBDIR)" && $(RANLIB) threads.$(A)
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
@@ -149,10 +161,10 @@ depend:
 	$(error Dependencies cannot be regenerated using the MSVC ports)
 else
 depend:
-	$(CC) -MM $(CPPFLAGS) -I$(ROOTDIR)/byterun st_stubs.c \
+	$(CC) -MM $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime st_stubs.c \
 	  | sed -e 's/st_stubs\.o/st_stubs_b.$$(O)/' \
 	  -e 's/ st_\(posix\|win32\)\.h//g' > .depend
-	$(CC) -MM $(CPPFLAGS) -I$(ROOTDIR)/asmrun -I$(ROOTDIR)/byterun \
+	$(CC) -MM $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime \
 	  -DNATIVE_CODE -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) \
 	  st_stubs.c | sed -e 's/st_stubs\.o/st_stubs_n.$$(O)/' \
 	  -e 's/ st_\(posix\|win32\)\.h//g' >> .depend

@@ -14,11 +14,13 @@
 #**************************************************************************
 
 include ../config/Makefile
+include ../Makefile.common
+
 UNIXDIR=../otherlibs/$(UNIXLIB)
 CAMLRUN ?= ../boot/ocamlrun
 CAMLYACC ?= ../boot/ocamlyacc
 
-CAMLC=$(CAMLRUN) ../ocamlc -nostdlib -I ../stdlib
+CAMLC=$(CAMLRUN) ../ocamlc -g -nostdlib -I ../stdlib
 COMPFLAGS=$(INCLUDES) -absname -w +a-4-9-41-42-44-45-48 -warn-error A \
           -safe-string -strict-sequence -strict-formats
 LINKFLAGS=-linkall -I $(UNIXDIR)
@@ -27,15 +29,13 @@ CAMLLEX=$(CAMLRUN) ../boot/ocamllex
 CAMLDEP=$(CAMLRUN) ../tools/ocamldep
 DEPFLAGS=$(INCLUDES)
 
-INSTALL_BINDIR=$(DESTDIR)$(BINDIR)
-
 INCLUDES=\
   -I ../utils -I ../parsing -I ../typing -I ../bytecomp -I ../toplevel \
   -I ../driver -I $(UNIXDIR)
 
 OTHEROBJS=\
   $(UNIXDIR)/unix.cma \
-  ../utils/config.cmo ../utils/tbl.cmo ../utils/misc.cmo \
+  ../utils/config.cmo ../utils/build_path_prefix_map.cmo ../utils/misc.cmo \
   ../utils/identifiable.cmo ../utils/numbers.cmo \
   ../utils/arg_helper.cmo ../utils/clflags.cmo \
   ../utils/consistbl.cmo ../utils/warnings.cmo \
@@ -96,7 +96,7 @@ ocamldebug$(EXE): $(OBJS) $(OTHEROBJS)
 	$(CAMLC) $(LINKFLAGS) -o ocamldebug$(EXE) -linkall $(OTHEROBJS) $(OBJS)
 
 install:
-	cp ocamldebug$(EXE) "$(INSTALL_BINDIR)/ocamldebug$(EXE)"
+	$(INSTALL_PROG) ocamldebug$(EXE) "$(INSTALL_BINDIR)/ocamldebug$(EXE)"
 
 clean::
 	rm -f ocamldebug$(EXE)

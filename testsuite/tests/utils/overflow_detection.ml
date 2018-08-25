@@ -1,3 +1,9 @@
+(* TEST
+include config
+include testing
+binary_modules = "config build_path_prefix_map misc identifiable numbers"
+* bytecode
+*)
 
 let print_int i =
   if i = max_int then

@@ -261,8 +261,10 @@ let index_from s i c =
 (* duplicated in string.ml *)
 let index_from_opt s i c =
   let l = length s in
-  if i < 0 || i > l then invalid_arg "String.index_from_opt / Bytes.index_from_opt" else
-  index_rec_opt s l i c
+  if i < 0 || i > l then
+    invalid_arg "String.index_from_opt / Bytes.index_from_opt"
+  else
+    index_rec_opt s l i c
 
 (* duplicated in string.ml *)
 let rec rindex_rec s i c =
@@ -327,3 +329,42 @@ let lowercase s = map Char.lowercase s
 
 let capitalize s = apply1 Char.uppercase s
 let uncapitalize s = apply1 Char.lowercase s
+
+(** {6 Iterators} *)
+
+let to_seq s =
+  let rec aux i () =
+    if i = length s then Seq.Nil
+    else
+      let x = get s i in
+      Seq.Cons (x, aux (i+1))
+  in
+  aux 0
+
+let to_seqi s =
+  let rec aux i () =
+    if i = length s then Seq.Nil
+    else
+      let x = get s i in
+      Seq.Cons ((i,x), aux (i+1))
+  in
+  aux 0
+
+let of_seq i =
+  let n = ref 0 in
+  let buf = ref (make 256 '\000') in
+  let resize () =
+    (* resize *)
+    let new_len = min (2 * length !buf) Sys.max_string_length in
+    if length !buf = new_len then failwith "Bytes.of_seq: cannot grow bytes";
+    let new_buf = make new_len '\000' in
+    blit !buf 0 new_buf 0 !n;
+    buf := new_buf
+  in
+  Seq.iter
+    (fun c ->
+       if !n = length !buf then resize();
+       set !buf !n c;
+       incr n)
+    i;
+  sub !buf 0 !n

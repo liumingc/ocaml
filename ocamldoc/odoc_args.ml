@@ -199,9 +199,8 @@ let anonymous f =
 module Options = Main_args.Make_ocamldoc_options(struct
   let set r () = r := true
   let unset r () = r := false
-  let _absname = set Location.absname
-  let _I s = Odoc_global.include_dirs :=
-       (Misc.expand_directory Config.standard_library s) :: !Odoc_global.include_dirs
+  let _absname = set Clflags.absname
+  let _I s = Odoc_global.include_dirs := s :: !Odoc_global.include_dirs
   let _impl s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Impl_file s]
   let _intf s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Intf_file s]
   let _intf_suffix s = Config.interface_suffix := s
@@ -241,6 +240,8 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _where = Compenv.print_standard_library
   let _verbose = set Clflags.verbose
   let _nopervasives = set Clflags.nopervasives
+  let _dno_unique_ids = unset Clflags.unique_ids
+  let _dunique_ids = set Clflags.unique_ids
   let _dsource = set Clflags.dump_source
   let _dparsetree = set Clflags.dump_parsetree
   let _dtypedtree = set Clflags.dump_typedtree
@@ -248,12 +249,15 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _dlambda = set Clflags.dump_lambda
   let _dflambda = set Clflags.dump_flambda
   let _dinstr = set Clflags.dump_instr
+  let _dcamlprimc = set Clflags.keep_camlprimc_file
   let anonymous = anonymous
 end)
 
 (** The default option list *)
 let default_options = Options.list @
 [
+  "-initially-opened-module", Arg.Set_string Odoc_global.initially_opened_module,
+  M.initially_opened_module;
   "-text", Arg.String (fun s ->
        Odoc_global.files := !Odoc_global.files @ [Odoc_global.Text_file s]),
     M.option_text ;

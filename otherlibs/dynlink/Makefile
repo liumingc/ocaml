@@ -18,6 +18,8 @@
 # FIXME reduce redundancy by including ../Makefile
 
 include ../../config/Makefile
+include ../../Makefile.common
+
 CAMLRUN ?= ../../boot/ocamlrun
 CAMLYACC ?= ../../boot/ocamlyacc
 
@@ -38,10 +40,11 @@ endif
 OBJS=dynlinkaux.cmo dynlink.cmo
 
 COMPILEROBJS=\
-  ../../utils/misc.cmo ../../utils/config.cmo \
+  ../../utils/config.cmo ../../utils/build_path_prefix_map.cmo \
+  ../../utils/misc.cmo \
   ../../utils/identifiable.cmo ../../utils/numbers.cmo \
   ../../utils/arg_helper.cmo ../../utils/clflags.cmo \
-  ../../utils/tbl.cmo ../../utils/consistbl.cmo \
+  ../../utils/consistbl.cmo \
   ../../utils/terminfo.cmo ../../utils/warnings.cmo \
   ../../parsing/asttypes.cmi \
   ../../parsing/location.cmo ../../parsing/longident.cmo \
@@ -87,15 +90,23 @@ dynlink.cmx: dynlink.cmi natdynlink.ml
 extract_crc: dynlink.cma extract_crc.cmo
 	$(OCAMLC) -o extract_crc dynlink.cma extract_crc.cmo
 
-INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
-
 install:
-	cp dynlink.cmi dynlink.cmti dynlink.cma dynlink.mli "$(INSTALL_LIBDIR)"
-	cp extract_crc "$(INSTALL_LIBDIR)/extract_crc$(EXE)"
+	$(INSTALL_DATA) \
+	  dynlink.cmi dynlink.cma \
+	  "$(INSTALL_LIBDIR)"
+ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
+	$(INSTALL_DATA) \
+	  dynlink.cmti dynlink.mli \
+	  "$(INSTALL_LIBDIR)"
+endif
+	$(INSTALL_PROG) \
+	  extract_crc "$(INSTALL_LIBDIR)/extract_crc$(EXE)"
 
 installopt:
 	if $(NATDYNLINK); then \
-	  cp $(NATOBJS) dynlink.cmxa dynlink.$(A) "$(INSTALL_LIBDIR)" && \
+	  $(INSTALL_DATA) \
+	    $(NATOBJS) dynlink.cmxa dynlink.$(A) \
+	    "$(INSTALL_LIBDIR)" && \
 	  cd "$(INSTALL_LIBDIR)" && $(RANLIB) dynlink.$(A); \
 	fi
 

@@ -42,6 +42,7 @@ val add_module_path: Path.t -> Path.t -> t -> t
 val add_modtype: Ident.t -> module_type -> t -> t
 val for_saving: t -> t
 val reset_for_saving: unit -> unit
+val change_locs: t -> Location.t -> t
 
 val module_path: t -> Path.t -> Path.t
 val type_path: t -> Path.t -> Path.t
@@ -58,7 +59,6 @@ val modtype: t -> module_type -> module_type
 val signature: t -> signature -> signature
 val modtype_declaration: t -> modtype_declaration -> modtype_declaration
 val module_declaration: t -> module_declaration -> module_declaration
-val typexp : t -> Types.type_expr -> Types.type_expr
 val class_signature: t -> class_signature -> class_signature
 
 (* Composition of substitutions:

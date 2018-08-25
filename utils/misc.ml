@@ -17,18 +17,37 @@
 
 exception Fatal_error
 
-let fatal_error msg =
-  prerr_string ">> Fatal error: "; prerr_endline msg; raise Fatal_error
+let fatal_errorf fmt =
+  Format.kfprintf
+    (fun _ -> raise Fatal_error)
+    Format.err_formatter
+    ("@?>> Fatal error: " ^^ fmt ^^ "@.")
 
-let fatal_errorf fmt = Format.kasprintf fatal_error fmt
+let fatal_error msg = fatal_errorf "%s" msg
 
 (* Exceptions *)
 
-let try_finally work cleanup =
-  let result = (try work () with e -> cleanup (); raise e) in
-  cleanup ();
-  result
-;;
+let try_finally ?(always=(fun () -> ())) ?(exceptionally=(fun () -> ())) work =
+  match work () with
+    | result ->
+      begin match always () with
+        | () -> result
+        | exception always_exn ->
+          let always_bt = Printexc.get_raw_backtrace () in
+          exceptionally ();
+          Printexc.raise_with_backtrace always_exn always_bt
+      end
+    | exception work_exn ->
+      let work_bt = Printexc.get_raw_backtrace () in
+      begin match always () with
+        | () ->
+          exceptionally ();
+          Printexc.raise_with_backtrace work_exn work_bt
+        | exception always_exn ->
+          let always_bt = Printexc.get_raw_backtrace () in
+          exceptionally ();
+          Printexc.raise_with_backtrace always_exn always_bt
+      end
 
 type ref_and_value = R : 'a ref * 'a -> ref_and_value
 
@@ -139,6 +158,14 @@ module Stdlib = struct
   module Option = struct
     type 'a t = 'a option
 
+    let is_none = function
+      | None -> true
+      | Some _ -> false
+
+    let is_some = function
+      | None -> false
+      | Some _ -> true
+
     let equal eq o1 o2 =
       match o1, o2 with
       | None, None -> true
@@ -174,6 +201,13 @@ module Stdlib = struct
         else loop (succ i) in
       loop 0
   end
+
+  module String = struct
+    include String
+    module Set = Set.Make(String)
+    module Map = Map.Make(String)
+  end
+
 end
 
 let may = Stdlib.Option.iter
@@ -416,19 +450,26 @@ module LongString = struct
       set dst (dstoff + i) (get src (srcoff + i))
     done
 
+  let blit_string src srcoff dst dstoff len =
+    for i = 0 to len - 1 do
+      set dst (dstoff + i) (String.get src (srcoff + i))
+    done
+
   let output oc tbl pos len =
     for i = pos to pos + len - 1 do
       output_char oc (get tbl i)
     done
 
-  let unsafe_blit_to_bytes src srcoff dst dstoff len =
-    for i = 0 to len - 1 do
-      Bytes.unsafe_set dst (dstoff + i) (get src (srcoff + i))
-    done
+  let input_bytes_into tbl ic len =
+    let count = ref len in
+    Array.iter (fun str ->
+      let chunk = min !count (Bytes.length str) in
+      really_input ic str 0 chunk;
+      count := !count - chunk) tbl
 
   let input_bytes ic len =
     let tbl = create len in
-    Array.iter (fun str -> really_input ic str 0 (Bytes.length str)) tbl;
+    input_bytes_into tbl ic len;
     tbl
 end
 
@@ -515,10 +556,6 @@ let did_you_mean ppf get_choices =
 let cut_at s c =
   let pos = String.index s c in
   String.sub s 0 pos, String.sub s (pos+1) (String.length s - pos - 1)
-
-
-module StringSet = Set.Make(struct type t = string let compare = compare end)
-module StringMap = Map.Make(struct type t = string let compare = compare end)
 
 (* Color handling *)
 module Color = struct
@@ -732,3 +769,63 @@ module MakeHooks(M: sig
   let apply_hooks sourcefile intf =
     fold_hooks !hooks sourcefile intf
 end
+
+(* showing configuration and configuration variables *)
+let show_config_and_exit () =
+  Config.print_config stdout;
+  exit 0
+
+let show_config_variable_and_exit x =
+  match Config.config_var x with
+  | Some v ->
+      (* we intentionally don't print a newline to avoid Windows \r
+         issues: bash only strips the trailing \n when using a command
+         substitution $(ocamlc -config-var foo), so a trailing \r would
+         remain if printing a newline under Windows and scripts would
+         have to use $(ocamlc -config-var foo | tr -d '\r')
+         for portability. Ugh. *)
+      print_string v;
+      exit 0
+  | None ->
+      exit 2
+
+let get_build_path_prefix_map =
+  let init = ref false in
+  let map_cache = ref None in
+  fun () ->
+    if not !init then begin
+      init := true;
+      match Sys.getenv "BUILD_PATH_PREFIX_MAP" with
+      | exception Not_found -> ()
+      | encoded_map ->
+        match Build_path_prefix_map.decode_map encoded_map with
+          | Error err ->
+              fatal_errorf
+                "Invalid value for the environment variable \
+                 BUILD_PATH_PREFIX_MAP: %s" err
+          | Ok map -> map_cache := Some map
+    end;
+    !map_cache
+
+let debug_prefix_map_flags () =
+  if not Config.as_has_debug_prefix_map then
+    []
+  else begin
+    match get_build_path_prefix_map () with
+    | None -> []
+    | Some map ->
+      List.fold_right
+        (fun map_elem acc ->
+           match map_elem with
+           | None -> acc
+           | Some { Build_path_prefix_map.target; source; } ->
+             (Printf.sprintf "--debug-prefix-map %s=%s"
+                (Filename.quote source)
+                (Filename.quote target)) :: acc)
+        map
+        []
+  end
+
+let print_if ppf flag printer arg =
+  if !flag then Format.fprintf ppf "%a@." printer arg;
+  arg

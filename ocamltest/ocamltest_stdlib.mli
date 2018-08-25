@@ -39,7 +39,7 @@ module List : sig
 end
 
 module String : sig
-  include module type of String
+  include module type of Misc.Stdlib.String
   val words : string -> string list
 end
 
@@ -50,12 +50,9 @@ module Sys : sig
   val make_directory : string -> unit
   val string_of_file : string -> string
   val copy_file : string -> string -> unit
+  val force_remove : string -> unit
+  val has_symlink : unit -> bool
   val with_chdir : string -> (unit -> 'a) -> 'a
+  val getenv_with_default_value : string -> string -> string
+  val safe_getenv : string -> string
 end
-
-module StringSet : sig
-  include Set.S with type elt = string
-  val string_of_stringset : t -> string
-end
-
-module StringMap : Map.S with type key = string

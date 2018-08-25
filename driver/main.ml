@@ -21,16 +21,11 @@ let usage = "Usage: ocamlc <options> <files>\nOptions are:"
 (* Error messages to standard error formatter *)
 let ppf = Format.err_formatter
 
-let show_config () =
-  Config.print_config stdout;
-  exit 0;
-;;
-
 module Options = Main_args.Make_bytecomp_options (struct
   let set r () = r := true
   let unset r () = r := false
   let _a = set make_archive
-  let _absname = set Location.absname
+  let _absname = set Clflags.absname
   let _annot = set annotations
   let _binannot = set binary_annotations
   let _c = set compile_only
@@ -38,7 +33,8 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _cclib s = Compenv.defer (ProcessObjects (Misc.rev_split_words s))
   let _ccopt s = first_ccopts := s :: !first_ccopts
   let _compat_32 = set bytecode_compatible_32
-  let _config = show_config
+  let _config = Misc.show_config_and_exit
+  let _config_var = Misc.show_config_variable_and_exit
   let _custom = set custom_runtime
   let _no_check_prims = set no_check_prims
   let _dllib s = defer (ProcessDLLs (Misc.rev_split_words s))
@@ -93,7 +89,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _vmthread = set use_vmthreads
   let _unboxed_types = set unboxed_types
   let _no_unboxed_types = unset unboxed_types
-  let _unsafe = set fast
+  let _unsafe = set unsafe
   let _unsafe_string = set unsafe_string
   let _use_prims s = use_prims := s
   let _use_runtime s = use_runtime := s
@@ -111,12 +107,17 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _where = print_standard_library
   let _verbose = set verbose
   let _nopervasives = set nopervasives
+  let _match_context_rows n = match_context_rows := n
+  let _dump_into_file = set dump_into_file
+  let _dno_unique_ids = unset unique_ids
+  let _dunique_ids = set unique_ids
   let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _dinstr = set dump_instr
+  let _dcamlprimc = set keep_camlprimc_file
   let _dtimings () = profile_columns := [ `Time ]
   let _dprofile () = profile_columns := Profile.all_columns
 
@@ -134,7 +135,7 @@ let main () =
   try
     readenv ppf Before_args;
     Clflags.parse_arguments anonymous usage;
-    Compmisc.read_color_env ppf;
+    Compmisc.read_color_env ();
     begin try
       Compenv.process_deferred_actions
         (ppf,
@@ -151,8 +152,9 @@ let main () =
     end;
     readenv ppf Before_link;
     if
-      List.length (List.filter (fun x -> !x)
-                      [make_archive;make_package;compile_only;output_c_object])
+      List.length
+        (List.filter (fun x -> !x)
+           [make_archive;make_package;compile_only;output_c_object])
         > 1
     then
       if !print_types then
@@ -162,17 +164,18 @@ let main () =
     if !make_archive then begin
       Compmisc.init_path false;
 
-      Bytelibrarian.create_archive ppf
-                                   (Compenv.get_objfiles ~with_ocamlparam:false)
-                                   (extract_output !output_name);
+      Bytelibrarian.create_archive
+        (Compenv.get_objfiles ~with_ocamlparam:false)
+        (extract_output !output_name);
       Warnings.check_fatal ();
     end
     else if !make_package then begin
       Compmisc.init_path false;
       let extracted_output = extract_output !output_name in
       let revd = get_objfiles ~with_ocamlparam:false in
-      Bytepackager.package_files ppf (Compmisc.initial_env ())
-        revd (extracted_output);
+      Compmisc.with_ppf_dump ~fileprefix:extracted_output (fun ppf_dump ->
+        Bytepackager.package_files ~ppf_dump (Compmisc.initial_env ())
+          revd (extracted_output));
       Warnings.check_fatal ();
     end
     else if not !compile_only && !objfiles <> [] then begin
@@ -193,7 +196,7 @@ let main () =
           default_output !output_name
       in
       Compmisc.init_path false;
-      Bytelink.link ppf (get_objfiles ~with_ocamlparam:true) target;
+      Bytelink.link (get_objfiles ~with_ocamlparam:true) target;
       Warnings.check_fatal ();
     end;
   with x ->
